@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Парковка</title>
+<style>
+[hidden] { display: none !important; }
+body { margin: 24px auto; max-width: 1100px; padding: 0 18px; background: #141b21; color: #f2f5f7; font: 16px system-ui, sans-serif; }
+header, nav { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+header { justify-content: space-between; }
+button { padding: 8px 12px; border: 1px solid #5e7380; border-radius: 6px; background: #26353c; color: inherit; font: inherit; cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+input, select { min-width: 7em; padding: 7px; font: inherit; }
+input { width: 7em; }
+#save { background: #14654c; }
+img, canvas { display: block; width: 100%; height: auto; border-radius: 6px; }
+canvas { cursor: crosshair; touch-action: none; }
+ul { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; }
+li { padding: 8px 12px; background: #26353c; border-radius: 4px; }
+li.occupied { background: #713535; }
+#message { color: #ffcf83; }
+</style>
+<header><h1>Парковка</h1><button id="edit" disabled>Разметить места</button></header>
+<main>
+<section id="live">
+  <p id="status" role="status">Ожидание камеры</p>
+  <ul id="spaces"></ul>
+  <img id="frame" hidden alt="Кадр камеры с машинами и парковочными местами">
+</section>
+<section id="editor" hidden>
+  <nav>
+    <button id="save">Сохранить</button>
+    <label>Выбрать место <select id="select-space" disabled></select></label>
+    <label>Номер места <input id="space-number" type="number" min="1" max="999999" step="1" required disabled></label>
+    <button id="remove" disabled>Удалить выбранное</button>
+    <button id="cancel">Отмена</button>
+  </nav>
+  <p>Протяни по кадру, чтобы добавить место. Перетаскивай место целиком или за правый нижний угол, чтобы изменить его.</p>
+  <canvas id="canvas" aria-label="Кадр для разметки парковочных мест"></canvas>
+</section>
+<p id="message" role="status"></p>
+</main>
+<script>
+const get = id => document.getElementById(id);
+const frame = get('frame');
+const canvas = get('canvas');
+const ctx = canvas.getContext('2d');
+const editor = get('editor');
+const spacePicker = get('select-space');
+const numberInput = get('space-number');
+const message = get('message');
+let lastUpdate;
+let revision;
+let entries = [];
+let selected = -1;
+let drag;
+let still;
+
+async function refresh() {
+  try {
+    const response = await fetch('/status.json', {cache: 'no-store'});
+    if (!response.ok) throw Error();
+    const data = await response.json();
+    const stale = Date.now() / 1000 - data.updated_at > 8;
+    if (lastUpdate !== data.updated_at && editor.hidden) {
+      frame.src = '/frame.jpg?' + data.updated_at;
+      frame.hidden = false;
+      lastUpdate = data.updated_at;
+    }
+    get('edit').disabled = stale || !editor.hidden;
+    get('status').textContent = stale ? 'Камера не передаёт новые кадры' :
+      data.configured ? 'Мест: ' + Object.keys(data.spaces).length : 'Места ещё не размечены';
+    get('spaces').replaceChildren(...Object.entries(data.spaces).sort(([a], [b]) =>
+      (data.numbers?.[a] ?? Number(a)) - (data.numbers?.[b] ?? Number(b))
+    ).map(([name, id]) => {
+      const item = document.createElement('li');
+      item.classList.toggle('occupied', !stale && id !== null);
+      item.textContent = 'Место ' + (data.numbers?.[name] ?? name) + ' · ' + (stale ? 'Нет данных' : id === null ? 'Свободно' : 'Машина №' + id);
+      return item;
+    }));
+  } catch {
+    get('status').textContent = 'Нет связи с трекером';
+    get('edit').disabled = true;
+  } finally {
+    setTimeout(refresh, 500);
+  }
+}
+
+function draw() {
+  ctx.drawImage(still, 0, 0);
+  const width = canvas.width;
+  const height = canvas.height;
+  entries.forEach(({number, bounds}, i) => {
+    const [left, top, right, bottom] = bounds;
+    ctx.strokeStyle = ctx.fillStyle = i === selected ? '#ffd36b' : '#61e6a3';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(left * width, top * height, (right - left) * width, (bottom - top) * height);
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillText(number || 'Без номера', left * width + 4, top * height + 18);
+    if (i === selected) ctx.fillRect(right * width - 5, bottom * height - 5, 10, 10);
+  });
+  get('remove').disabled = selected < 0;
+  numberInput.disabled = selected < 0;
+  const number = selected < 0 ? '' : entries[selected].number;
+  if (numberInput.value !== number) numberInput.value = number;
+}
+
+function updateSpacePicker() {
+  const options = entries.map(({number}, index) => new Option(number ? '№ ' + number : 'Без номера', index));
+  spacePicker.replaceChildren(new Option('Выбери место', '-1'), ...options);
+  spacePicker.value = String(selected);
+  spacePicker.disabled = entries.length === 0;
+}
+
+spacePicker.onchange = () => {
+  if (drag) {
+    spacePicker.value = String(selected);
+    return;
+  }
+  selected = Number(spacePicker.value);
+  draw();
+};
+
+numberInput.oninput = () => {
+  if (selected < 0) return;
+  entries[selected].number = numberInput.value;
+  updateSpacePicker();
+  draw();
+};
+
+function nextNumber() {
+  const used = new Set(entries.map(entry => Number(entry.number)));
+  let number = 1;
+  while (used.has(number)) number++;
+  return String(number);
+}
+
+const clamp = (value, max = 1) => Math.max(0, Math.min(max, value));
+function pointer(event) {
+  const rect = canvas.getBoundingClientRect();
+  return [clamp((event.clientX - rect.left) / rect.width), clamp((event.clientY - rect.top) / rect.height)];
+}
+canvas.onpointerdown = event => {
+  if (drag || event.button !== 0) return;
+  const [x, y] = pointer(event);
+  const rect = canvas.getBoundingClientRect();
+  const handle = selected >= 0 && entries[selected].bounds;
+  const resize = handle && Math.abs(x - handle[2]) * rect.width < 12 && Math.abs(y - handle[3]) * rect.height < 12;
+  if (!resize) {
+    selected = -1;
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const [left, top, right, bottom] = entries[i].bounds;
+      if (x >= left && x <= right && y >= top && y <= bottom) {
+        selected = i;
+        break;
+      }
+    }
+  }
+  const mode = resize ? 'resize' : selected < 0 ? 'draw' : 'move';
+  if (mode === 'draw') {
+    selected = entries.length;
+    entries.push({id: null, number: nextNumber(), bounds: [x, y, x, y]});
+  }
+  drag = {x, y, mode, pointerId: event.pointerId, bounds: entries[selected].bounds.slice()};
+  canvas.setPointerCapture(event.pointerId);
+  updateSpacePicker();
+  draw();
+};
+canvas.onpointermove = event => {
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  const [x,y] = pointer(event);
+  let [l,t,r,b] = drag.bounds;
+  if (drag.mode === 'draw') {
+    [l,t,r,b] = [Math.min(x,l),Math.min(y,t),Math.max(x,l),Math.max(y,t)];
+  } else if (drag.mode === 'resize') {
+    r = Math.max(l + .005, x);
+    b = Math.max(t + .005, y);
+  } else {
+    const width = r-l, height = b-t;
+    l = clamp(l + x - drag.x, 1-width);
+    t = clamp(t + y - drag.y, 1-height);
+    r = l + width;
+    b = t + height;
+  }
+  entries[selected].bounds = [l,t,r,b];
+  draw();
+};
+function endDrag(event, canceled) {
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  const [l,t,r,b] = entries[selected].bounds;
+  if (drag.mode === 'draw' && (canceled || r-l < .005 || b-t < .005)) {
+    entries.splice(selected,1);
+    selected = -1;
+  } else if (canceled) {
+    entries[selected].bounds = drag.bounds;
+  }
+  drag = null;
+  updateSpacePicker();
+  draw();
+}
+canvas.onpointerup = event => endDrag(event, false);
+canvas.onpointercancel = event => endDrag(event, true);
+get('remove').onclick = () => {
+  if (selected < 0 || drag) return;
+  entries.splice(selected,1);
+  selected = -1;
+  updateSpacePicker();
+  draw();
+};
+
+get('edit').onclick = async () => {
+  get('edit').disabled = true;
+  message.textContent = '';
+  try {
+    const response = await fetch('/api/layout');
+    if (!response.ok) throw Error();
+    const data = await response.json();
+    still = new Image();
+    still.src = '/raw.jpg?' + Date.now();
+    await still.decode();
+    canvas.width = still.naturalWidth;
+    canvas.height = still.naturalHeight;
+    revision = data.revision;
+    entries = Object.entries(data.spaces).map(([id, points]) => {
+      const x = points.map(point => point[0]);
+      const y = points.map(point => point[1]);
+      return {id: Number(id), number: String(data.numbers?.[id] ?? id), bounds: [Math.min(...x), Math.min(...y), Math.max(...x), Math.max(...y)]};
+    });
+    selected = -1;
+    get('live').hidden = true;
+    editor.hidden = false;
+    updateSpacePicker();
+    draw();
+  } catch {
+    message.textContent = 'Не удалось загрузить кадр или разметку.';
+  }
+};
+
+function closeEditor() {
+  editor.hidden = true;
+  get('live').hidden = false;
+}
+get('cancel').onclick = () => {
+  if (drag || get('save').disabled) return;
+  message.textContent = '';
+  closeEditor();
+};
+get('save').onclick = async () => {
+  if (drag) return;
+  const spaces = entries.map(entry => ({...entry, number: Number(entry.number)}));
+  if (spaces.some(({number}) => !Number.isInteger(number) || number < 1 || number > 999999)) {
+    message.textContent = 'Укажи для каждого места целый номер от 1 до 999999.';
+    return;
+  }
+  if (new Set(spaces.map(entry => entry.number)).size !== spaces.length) {
+    message.textContent = 'Номера мест должны быть уникальными.';
+    return;
+  }
+  get('save').disabled = true;
+  try {
+    const response = await fetch('/api/layout', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({revision, spaces}),
+    });
+    const data = await response.json();
+    if (!response.ok) throw Error(data.error);
+    closeEditor();
+    message.textContent = 'Разметка сохранена. Мест: ' + Object.keys(data.spaces).length;
+  } catch (error) {
+    message.textContent = error.message || 'Не удалось сохранить разметку.';
+  } finally {
+    get('save').disabled = false;
+  }
+};
+refresh();
+</script>
+</html>
