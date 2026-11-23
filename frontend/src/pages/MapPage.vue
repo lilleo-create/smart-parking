@@ -35,7 +35,7 @@ function revealRow(id?: string) {
 }
 </script>
 <template>
-  <section class="page map-page">
+  <section class="page map-page" :class="{ 'fixed-catalog': useParkingApi }">
     <h1>Карта парковок</h1>
     <div class="map-layout">
       <AddressSearch
