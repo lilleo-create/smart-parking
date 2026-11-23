@@ -13,6 +13,7 @@ export interface Parking {
   address: string
   entrance: { lat: number; lon: number }
   sectionColumns?: number
+  live?: boolean
   spots: Spot[]
 }
 export interface Snapshot {

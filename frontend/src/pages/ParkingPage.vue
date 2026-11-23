@@ -63,10 +63,12 @@ function forget() {
       <div class="card plan-card">
         <div class="card-head">
           <h2>Схема мест</h2>
-          <strong class="spot-count">{{ counts.label }}</strong>
+          <strong v-if="parking.spots.length" class="spot-count">{{ counts.label }}</strong>
         </div>
+        <p v-if="parking.live && !parking.spots.length" role="status">Ожидаем разметку с камеры.</p>
         <p v-if="saveError" role="alert">{{ saveError }}</p>
         <ParkingGrid
+          v-if="parking.spots.length"
           @remember="save"
           :parking="parking"
           :snapshot="currentSnapshot"
