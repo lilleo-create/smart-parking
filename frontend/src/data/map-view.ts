@@ -54,6 +54,9 @@ export function rasterMap(
   const tiles = L.tileLayer(url, {
     maxZoom: 19,
     maxNativeZoom: twoGisKey ? 18 : 19,
+    keepBuffer: 1,
+    updateWhenIdle: true,
+    updateWhenZooming: false,
     attribution: twoGisKey
       ? '© <a href="https://2gis.ru/">2ГИС</a>'
       : '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',

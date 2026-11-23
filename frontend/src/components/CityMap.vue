@@ -43,7 +43,7 @@ function paintLabels() {
     const info = availability.value[p.id]
     const label = info.label
     if (el.textContent !== label) el.textContent = label
-    el.dataset.compact = 'P · ' + (info.free || !info.unknown ? info.free : '?')
+    el.dataset.compact = 'P · ' + (!p.spots.length || (!info.free && info.unknown) ? '?' : info.free)
     el.title = p.name + ' — ' + info.label
     el.setAttribute('aria-label', el.title)
   })
@@ -141,7 +141,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <span v-if="!ready || tilesMissing" class="map-notice" role="status">{{
-      ready ? 'Не удалось загрузить часть карты. Проверьте сеть.' : 'Загружаем карту…'
+      ready ? 'Подложка загрузилась не полностью. Парковки можно выбрать в списке.' : 'Загружаем карту…'
     }}</span>
   </div>
 </template>

@@ -3,6 +3,7 @@ import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Icon from './components/Icon.vue'
 import BrandLogo from './components/BrandLogo.vue'
+import { useParkingApi } from './data/api'
 import { refresh, tick, resetParkings, dataError } from './data/state'
 import { areaCenter, selectAddress } from './data/location'
 import { savedSpot } from './data/saved-spot'
@@ -20,14 +21,14 @@ function reload() {
 }
 watch(() => route.fullPath, reload, { immediate: true })
 watch(areaCenter, () => {
-  if (privatePage.value) {
+  if (privatePage.value && !useParkingApi) {
     resetParkings()
     reload()
   }
 })
 let polling: number, clock: number
 onMounted(() => {
-  polling = window.setInterval(reload, 5000)
+  polling = window.setInterval(reload, useParkingApi ? 1000 : 5000)
   clock = window.setInterval(tick, 1000)
   window.addEventListener('online', connection)
   window.addEventListener('offline', connection)

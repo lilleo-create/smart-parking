@@ -1,6 +1,9 @@
 import { computed, reactive, ref } from 'vue'
-import { source } from './demo'
+import { apiSource, useParkingApi } from './api'
+import { source as demoSource } from './demo'
 import { summary, type Parking, type Snapshot } from './parking'
+
+const source = useParkingApi ? apiSource : demoSource
 
 export const parkings = ref<Parking[]>([])
 export const snapshots = reactive<Record<string, Snapshot | undefined>>({})

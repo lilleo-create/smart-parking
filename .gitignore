@@ -30,3 +30,7 @@ $RECYCLE.BIN/
 # Зависимости и сборка фронтенда
 /frontend/node_modules/
 /frontend/dist/
+
+# Локальное состояние API
+__pycache__/
+/backend/*.sqlite3*

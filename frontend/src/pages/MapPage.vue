@@ -4,6 +4,7 @@ import AddressSearch from '../components/AddressSearch.vue'
 import { searchAddress, selectAddress } from '../data/location'
 import CityMap from '../components/CityMap.vue'
 import Icon from '../components/Icon.vue'
+import { useParkingApi } from '../data/api'
 import { parkings, availability, pending, dataError } from '../data/state'
 const hovered = ref<string>()
 const focused = ref<string>()
@@ -34,10 +35,11 @@ function revealRow(id?: string) {
 }
 </script>
 <template>
-  <section class="page map-page">
+  <section class="page map-page" :class="{ 'fixed-catalog': useParkingApi }">
     <h1>Карта парковок</h1>
     <div class="map-layout">
       <AddressSearch
+        v-if="!useParkingApi"
         label="Где ищем парковку?"
         :initial="searchAddress?.label"
         @select="selectAddress"
@@ -45,8 +47,8 @@ function revealRow(id?: string) {
       <template v-if="parkings.length">
         <CityMap :highlighted="highlighted" @hover="hoverPin" @focus-pin="focusPin" />
         <aside class="card list-card">
-          <h2>Парковки рядом</h2>
-          <p class="list-context">{{ searchAddress?.label ?? 'Москва' }}</p>
+          <h2>{{ useParkingApi ? 'Демонстрационные парковки' : 'Парковки рядом' }}</h2>
+          <p class="list-context">{{ useParkingApi ? 'Москва' : searchAddress?.label ?? 'Москва' }}</p>
           <div ref="list" class="parking-results">
             <RouterLink
               class="parking-link"
