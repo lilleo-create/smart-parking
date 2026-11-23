@@ -43,7 +43,7 @@ function paintLabels() {
     const info = availability.value[p.id]
     const label = info.label
     if (el.textContent !== label) el.textContent = label
-    el.dataset.compact = 'P · ' + (info.free || !info.unknown ? info.free : '?')
+    el.dataset.compact = 'P · ' + (!p.spots.length || (!info.free && info.unknown) ? '?' : info.free)
     el.title = p.name + ' — ' + info.label
     el.setAttribute('aria-label', el.title)
   })
