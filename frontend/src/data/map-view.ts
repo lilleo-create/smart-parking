@@ -4,7 +4,6 @@ import { loadMaps } from './yandex'
 
 export type Point = [longitude: number, latitude: number]
 export type Pose = { center: Point; zoom: number }
-export type MapImage = { src: string; bounds: [L.LatLngTuple, L.LatLngTuple] }
 export interface MapView {
   move(view: Pose): void
   view(): Pose
@@ -40,27 +39,38 @@ export function rasterMap(
   initial: Pose,
   tileError: (failed: boolean) => void,
   twoGisKey?: string,
-  background?: MapImage,
 ): MapView {
   const map = L.map(host, {
     zoomControl: false,
     minZoom: 2,
-    maxZoom: background ? 17 : 19,
+    maxZoom: 19,
     attributionControl: true,
-  })
-  if (background) {
-    map.setMaxBounds(background.bounds)
-    map.setMinZoom(map.getBoundsZoom(background.bounds, true))
-  }
-  map.setView(latLng(initial.center), initial.zoom)
+  }).setView(latLng(initial.center), initial.zoom)
   map.attributionControl.setPrefix(false)
-  if (background) {
-    L.imageOverlay(background.src, background.bounds, {
-      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    }).on('error', () => tileError(true)).addTo(map)
-  } else {
-    addTiles(map, tileError, twoGisKey)
+  const url = twoGisKey
+    ? 'https://tile0.maps.2gis.com/v2/tiles/online_sd/{z}/{x}/{y}.png?key=' +
+      encodeURIComponent(twoGisKey)
+    : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+  const tiles = L.tileLayer(url, {
+    maxZoom: 19,
+    maxNativeZoom: twoGisKey ? 18 : 19,
+    keepBuffer: 1,
+    updateWhenIdle: true,
+    updateWhenZooming: false,
+    attribution: twoGisKey
+      ? '© <a href="https://2gis.ru/">2ГИС</a>'
+      : '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  }).addTo(map)
+  const failedTiles = new Set<HTMLElement>()
+  tiles.on('tileerror', ({ tile }) => {
+    failedTiles.add(tile)
+    tileError(true)
+  })
+  function clearTileFailure({ tile }: L.TileEvent) {
+    if (failedTiles.delete(tile)) tileError(failedTiles.size > 0)
   }
+  tiles.on('tileload', clearTileFailure)
+  tiles.on('tileunload', clearTileFailure)
   return {
     move: (v) => {
       map.setView(latLng(v.center), v.zoom, { animate: false })
@@ -82,34 +92,9 @@ export function rasterMap(
     },
     resize: () => {
       map.invalidateSize({ pan: false })
-      if (background) map.setMinZoom(map.getBoundsZoom(background.bounds, true))
     },
     destroy: () => map.remove(),
   }
-}
-
-function addTiles(map: L.Map, tileError: (failed: boolean) => void, twoGisKey?: string) {
-  const url = twoGisKey
-    ? 'https://tile0.maps.2gis.com/v2/tiles/online_sd/{z}/{x}/{y}.png?key=' +
-      encodeURIComponent(twoGisKey)
-    : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-  const tiles = L.tileLayer(url, {
-    maxZoom: 19,
-    maxNativeZoom: twoGisKey ? 18 : 19,
-    attribution: twoGisKey
-      ? '© <a href="https://2gis.ru/">2ГИС</a>'
-      : '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-  }).addTo(map)
-  const failedTiles = new Set<HTMLElement>()
-  tiles.on('tileerror', ({ tile }) => {
-    failedTiles.add(tile)
-    tileError(true)
-  })
-  function clearTileFailure({ tile }: L.TileEvent) {
-    if (failedTiles.delete(tile)) tileError(failedTiles.size > 0)
-  }
-  tiles.on('tileload', clearTileFailure)
-  tiles.on('tileunload', clearTileFailure)
 }
 
 export async function yandexMap(
