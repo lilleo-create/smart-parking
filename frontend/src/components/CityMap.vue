@@ -4,15 +4,25 @@ let overview: { pose: Pose; locations: string; size: string; provider: string } 
 <script setup lang="ts">
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import demoMap from '../assets/moscow-demo.webp'
+import { useParkingApi } from '../data/api'
 import { availability, parkings } from '../data/state'
 import type { Parking } from '../data/parking'
-import { fitted, rasterMap, yandexMap, type MapView, type Point, type Pose } from '../data/map-view'
+import { fitted, rasterMap, yandexMap, type MapImage, type MapView, type Point, type Pose } from '../data/map-view'
 
 const props = defineProps<{ highlighted?: string }>()
 const emit = defineEmits<{ hover: [id?: string]; focusPin: [id?: string] }>()
 const host = ref<HTMLElement>()
 const router = useRouter()
 const coords = (p: Parking): Point => [p.entrance.lon, p.entrance.lat]
+const demoBackground: MapImage = {
+  src: demoMap,
+  bounds: [[55.728, 37.526], [55.806, 37.674]],
+}
+function insideDemoMap([lon, lat]: Point) {
+  const [[south, west], [north, east]] = demoBackground.bounds
+  return south <= lat && lat <= north && west <= lon && lon <= east
+}
 const locations = computed(() => JSON.stringify(parkings.value.map((p) => [p.id, ...coords(p)])))
 const tilesMissing = ref(false)
 const ready = ref(false)
@@ -96,7 +106,11 @@ onMounted(async () => {
   if (!alive) return
   if (!view) {
     const backupKey = import.meta.env.VITE_2GIS_MAP_KEY?.trim()
-    view = rasterMap(el, initial, (failed) => (tilesMissing.value = failed), backupKey)
+    const background =
+      useParkingApi && !backupKey && parkings.value.every((p) => insideDemoMap(coords(p)))
+        ? demoBackground
+        : undefined
+    view = rasterMap(el, initial, (failed) => (tilesMissing.value = failed), backupKey, background)
     provider.value = backupKey ? '2ГИС' : 'OpenStreetMap'
   }
   ready.value = true
@@ -141,7 +155,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <span v-if="!ready || tilesMissing" class="map-notice" role="status">{{
-      ready ? 'Не удалось загрузить часть карты. Проверьте сеть.' : 'Загружаем карту…'
+      ready ? 'Подложка карты недоступна. Парковки можно выбрать в списке.' : 'Загружаем карту…'
     }}</span>
   </div>
 </template>
