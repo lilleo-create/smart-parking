@@ -55,6 +55,9 @@ svg {
   min-height: 100svh;
   display: flex;
   flex-direction: column;
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
 }
 .shell main {
   flex: 1;
@@ -62,6 +65,7 @@ svg {
 .top {
   background: #fff;
   border-bottom: 1px solid var(--line);
+  padding-top: env(safe-area-inset-top);
 }
 .top-inner,
 .page,
