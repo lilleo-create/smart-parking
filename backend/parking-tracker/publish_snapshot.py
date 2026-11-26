@@ -15,14 +15,18 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 def snapshot_from_status(status):
-    return {
-        "observed_at": status["updated_at"],
-        "spots": [
-            {"id": int(spot_id), "number": status["numbers"].get(spot_id, int(spot_id)),
-             "occupied": vehicle_id is not None}
-            for spot_id, vehicle_id in status["spaces"].items()
-        ],
-    }
+    bounds = status.get("bounds")
+    spots = []
+    for spot_id, vehicle_id in status["spaces"].items():
+        spot = {
+            "id": int(spot_id),
+            "number": status["numbers"].get(spot_id, int(spot_id)),
+            "occupied": vehicle_id is not None,
+        }
+        if bounds is not None:
+            spot["bounds"] = bounds[spot_id]
+        spots.append(spot)
+    return {"observed_at": status["updated_at"], "spots": spots}
 
 
 def publish(status_path, url, token):

@@ -11,6 +11,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
+from parking_plan import spatial_plan
+
 
 LIVE_ID = "open-lot"
 SNAPSHOT_TTL = 15
@@ -94,7 +96,20 @@ def parse_snapshot(payload, now):
             raise ValueError("occupied must be boolean")
         spot_ids.add(spot_id)
         labels.add(number)
-        result.append({"id": f"camera-{spot_id}", "number": number, "occupied": occupied})
+        entry = {"id": f"camera-{spot_id}", "number": number, "occupied": occupied}
+        if "bounds" in spot:
+            bounds = spot["bounds"]
+            if (not isinstance(bounds, list) or len(bounds) != 4
+                    or any(type(value) not in (int, float) or not 0 <= value <= 1 for value in bounds)):
+                raise ValueError("Expected normalized bounds [left, top, right, bottom]")
+            left, top, right, bottom = bounds
+            if left >= right or top >= bottom:
+                raise ValueError("Bounds must have positive width and height")
+            entry["bounds"] = bounds
+        result.append(entry)
+    with_bounds = sum("bounds" in spot for spot in result)
+    if 0 < with_bounds < len(result):
+        raise ValueError("Include bounds for every spot or omit them for all spots")
     return observed_at, sorted(result, key=lambda spot: spot["number"])
 
 
@@ -104,8 +119,11 @@ def make_listings(store, now):
     for parking_id, name, kind, address, lat, lon in PARKINGS:
         live = parking_id == LIVE_ID
         if live:
-            spots = [make_spot(spot["id"], str(spot["number"]), index, 6)
-                     for index, spot in enumerate(camera_spots)]
+            if camera_spots and "bounds" in camera_spots[0]:
+                spots = spatial_plan(camera_spots)
+            else:
+                spots = [make_spot(spot["id"], str(spot["number"]), index, 6)
+                         for index, spot in enumerate(camera_spots)]
             statuses = {spot["id"]: "occupied" if spot["occupied"] else "free" for spot in camera_spots}
             timestamp = observed
         else:

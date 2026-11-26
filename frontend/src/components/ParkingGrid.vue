@@ -9,6 +9,7 @@ const props = defineProps<{
   savedId?: string
 }>()
 const emit = defineEmits<{ remember: [spot: Spot] }>()
+const cameraPlan = computed(() => props.parking.spots.some((spot) => spot.planRow !== undefined))
 const sections = computed(() => {
   const groups = new Map<string, Map<string, Parking['spots']>>()
   for (const spot of props.parking.spots) {
@@ -156,7 +157,7 @@ function jump(event: Event) {
       class="lot-scroll"
       tabindex="0"
       role="region"
-      aria-label="Парковочные места по секциям"
+      :aria-label="cameraPlan ? 'Парковочные места на схеме' : 'Парковочные места по секциям'"
     >
       <div ref="plan" class="lot-plan">
         <svg v-if="path" class="plan-path" aria-hidden="true">
@@ -173,6 +174,7 @@ function jump(event: Event) {
         >
           <section
             class="lot-inner"
+            :class="{ 'lot-inner--camera': cameraPlan }"
             v-for="section in sections"
             :key="section.id"
             :data-section="section.id"
@@ -191,7 +193,7 @@ function jump(event: Event) {
                   class="bay"
                   :data-spot="spot.id"
                   :data-label="spot.label"
-                  :style="{ gridColumn: spot.position }"
+                  :style="{ gridColumn: spot.position, gridRow: spot.planRow }"
                   :class="[
                     bayStatus(spot.id),
                     { remembered: savedId === spot.id, destination: selected?.id === spot.id },

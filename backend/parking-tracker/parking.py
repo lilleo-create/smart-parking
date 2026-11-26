@@ -38,6 +38,10 @@ def track(args, capture):
             current_revision, _, polygons = layout(db)
             if current_revision != revision:
                 spaces = {int(name): np.asarray(points, dtype=np.float32) for name, points in polygons.items()}
+                bounds = {}
+                for name, points in polygons.items():
+                    xs, ys = zip(*points)
+                    bounds[name] = [min(xs), min(ys), max(xs), max(ys)]
                 numbers = space_numbers(db)
                 confirmed = dict.fromkeys(spaces)
                 confirmed.update(occupancies(db))
@@ -104,7 +108,8 @@ def track(args, capture):
         publish_frame(args.output, frame, "raw")
         publish_frame(args.output, preview)
         status = {
-            "configured": bool(spaces), "spaces": confirmed, "numbers": numbers, "updated_at": time.time(),
+            "configured": bool(spaces), "spaces": confirmed, "numbers": numbers,
+            "bounds": bounds, "updated_at": time.time(),
         }
         temp = args.output / ".status.json"
         temp.write_text(json.dumps(status, ensure_ascii=False) + "\n")
