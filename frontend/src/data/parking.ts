@@ -5,6 +5,7 @@ export interface Spot {
   section?: string
   row: string
   position: number
+  planRow?: number
 }
 export interface Parking {
   id: string

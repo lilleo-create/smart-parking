@@ -625,6 +625,21 @@ h3 {
 .bay > b {
   font-size: 13px;
 }
+.lot-inner--camera {
+  display: grid;
+  grid-auto-columns: 52px;
+  grid-auto-rows: 48px;
+  gap: 14px 6px;
+  padding-inline: 4px;
+}
+.lot-inner--camera .spot-row,
+.lot-inner--camera .bays {
+  display: contents;
+}
+.lot-inner--camera .bay {
+  flex-direction: column;
+  gap: 2px;
+}
 .bay.free {
   background: #cbf0da;
   color: #185e46;
